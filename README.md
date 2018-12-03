@@ -15,8 +15,8 @@ It also needs the Python packages *numpy* and *matplotlib* (the latter only if u
 
 ```bash
 # sudo apt update
-# sudo apt install exiftool
-# sudo pip install numpy matplotlib
+# sudo apt install exiftool python-setuptools
+# sudo pip install numpy matplotlib pillow 
 ```
 
 ## Usage
