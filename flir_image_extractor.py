@@ -59,6 +59,9 @@ class FlirImageExtractor:
             self.use_thumbnail = True
             self.fix_endian = False
 
+        if not self.is_valid_parameter('EmbeddedImage'):
+            self.use_thumbnail = True
+
         self.rgb_image_np = self.extract_embedded_image()
         self.thermal_image_np = self.extract_thermal_image()
 
@@ -72,6 +75,16 @@ class FlirImageExtractor:
         meta = json.loads(meta_json.decode())[0]
 
         return meta['RawThermalImageType']
+
+    def is_valid_parameter(self, param_name):
+        """
+        Check if the image has the requested parameter
+        :return:
+        """
+        meta = subprocess.check_output(
+            [self.exiftool_path, '-' + param_name, self.flir_img_filename]).decode()
+
+        return True if len(meta) > 0 else False
 
     def get_rgb_np(self):
         """
