@@ -5,18 +5,18 @@ The latter is used to enhance the thermal image using an edge detector.
 
 The resulting image is saved as a jpg image but both the original visual image and the raw thermal sensor data are embedded in the jpg metadata.
 
-This small Python tool/library allows to extract the original photo and thermal sensor values converted to temperatures.
+This small Python tool/library allows to extract the original photo and thermal sensor values converted to temperatures, as well as creating side-by-side thermal and visual images.
 
 ## Requirements
 
-This tool relies on `exiftool`. It should be available in most Linux distributions (e.g. as `perl-image-exiftool` in Arch Linux or `libimage-exiftool-perl` in Debian and Ubuntu).
+This tool relies on `exiftool`. It should be available in most Linux distributions (e.g. as `perl-image-exiftool` in Arch Linux or `libimage-exiftool-perl` in Debian and Ubuntu). Installing that dependency is outside of the scope of this README, but should be done using your OS'es package manager.
 
 It also needs the Python packages *numpy* and *matplotlib* (the latter only if used interactively).
 
 ```bash
-# sudo apt update
-# sudo apt install exiftool python-setuptools
-# sudo pip install numpy matplotlib pillow 
+python -mvenv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ## Usage
