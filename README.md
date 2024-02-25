@@ -7,6 +7,10 @@ The resulting image is saved as a jpg image but both the original visual image a
 
 This small Python tool/library allows to extract the original photo and thermal sensor values converted to temperatures, as well as creating side-by-side thermal and visual images.
 
+## NOTE ABOUT THIS FORK
+
+This is an absolutely minimal change to get this working, since I'll probably only use it once. There's a lot in this code that could be improved.
+
 ## Requirements
 
 This tool relies on `exiftool`. It should be available in most Linux distributions (e.g. as `perl-image-exiftool` in Arch Linux or `libimage-exiftool-perl` in Debian and Ubuntu). Installing that dependency is outside of the scope of this README, but should be done using your OS'es package manager.
@@ -25,8 +29,8 @@ This module can be used by importing it:
 
 ```python
 import flir_image_extractor
-fir = flir_image_extractor.FlirImageExtractor()
-fir.process_image('examples/ax8.jpg')
+fir = flir_image_extractor.FlirImageExtractor('examples/ax8.jpg')
+fir.process_image()
 fir.plot()
 ```
 

@@ -15,20 +15,28 @@ from PIL import Image
 from math import sqrt, exp, log
 from matplotlib import cm
 from matplotlib import pyplot as plt
+from glob import glob
 
 import numpy as np
 
 
 class FlirImageExtractor:
 
-    def __init__(self, exiftool_path="exiftool", is_debug=False):
+    def __init__(self, flir_img_filename, exiftool_path="exiftool", is_debug=False):
         self.exiftool_path = exiftool_path
         self.is_debug = is_debug
-        self.flir_img_filename = ""
-        self.image_suffix = "_rgb_image.jpg"
-        self.thumbnail_suffix = "_rgb_thumb.jpg"
-        self.thermal_suffix = "_thermal.png"
+        if self.is_debug:
+            print("INFO Flir image filepath:{}".format(flir_img_filename))
+        if not os.path.isfile(flir_img_filename):
+            raise ValueError("Input file does not exist or this user don't have permission on this file")
+        self.flir_img_filename = flir_img_filename
         self.default_distance = 1.0
+
+        fn_prefix, _ = os.path.splitext(self.flir_img_filename)
+        self.thermal_filename = fn_prefix + "_thermal.png"
+        self.image_filename = fn_prefix + "_visible.jpg"
+        self.combined_filename = fn_prefix + "_combined.jpg"
+        self.csv_filename = fn_prefix + '.csv'
 
         # valid for PNG thermal images
         self.use_thumbnail = False
@@ -37,23 +45,19 @@ class FlirImageExtractor:
         self.rgb_image_np = None
         self.thermal_image_np = None
 
-    pass
+    @property
+    def image_files_exist(self):
+        return os.path.exists(self.thermal_filename) and os.path.exists(
+            self.image_filename
+        ) and os.path.exists(self.combined_filename)
 
-    def process_image(self, flir_img_filename):
+    def process_image(self):
         """
         Given a valid image path, process the file: extract real thermal values
         and a thumbnail for comparison (generally thumbnail is on the visible spectre)
         :param flir_img_filename:
         :return:
         """
-        if self.is_debug:
-            print("INFO Flir image filepath:{}".format(flir_img_filename))
-
-        if not os.path.isfile(flir_img_filename):
-            raise ValueError("Input file does not exist or this user don't have permission on this file")
-
-        self.flir_img_filename = flir_img_filename
-
         if self.get_image_type().upper().strip() == "TIFF":
             # valid for tiff images from Zenmuse XTR
             self.use_thumbnail = True
@@ -242,26 +246,30 @@ class FlirImageExtractor:
         thermal_normalized = (thermal_np - np.amin(thermal_np)) / (np.amax(thermal_np) - np.amin(thermal_np))
         img_thermal = Image.fromarray(np.uint8(cm.inferno(thermal_normalized) * 255))
 
-        fn_prefix, _ = os.path.splitext(self.flir_img_filename)
-        thermal_filename = fn_prefix + self.thermal_suffix
-        image_filename = fn_prefix + self.image_suffix
-        if self.use_thumbnail:
-            image_filename = fn_prefix + self.thumbnail_suffix
-
         if self.is_debug:
-            print("DEBUG Saving RGB image to:{}".format(image_filename))
-            print("DEBUG Saving Thermal image to:{}".format(thermal_filename))
+            print("DEBUG Saving RGB image to:{}".format(self.image_filename))
+            print("DEBUG Saving Thermal image to:{}".format(self.thermal_filename))
 
-        img_visual.save(image_filename)
-        img_thermal.save(thermal_filename)
+        img_visual.save(self.image_filename)
+        img_thermal.save(self.thermal_filename)
 
-    def export_thermal_to_csv(self, csv_filename):
+        # combined image
+        orig = Image.open(self.flir_img_filename)
+        combined = Image.new(
+            'RGB', ((orig.width * 2) + 2, orig.height), (255, 255, 255)
+        )
+        combined.paste(orig, (0, 0))
+        if img_visual.height != orig.height or img_visual.width != orig.width:
+            img_visual = img_visual.resize((orig.width, orig.height))
+        combined.paste(img_visual, (orig.width + 2, 0))
+        combined.save(self.combined_filename)
+
+    def export_thermal_to_csv(self):
         """
         Convert thermal data in numpy to json
         :return:
         """
-
-        with open(csv_filename, 'w') as fh:
+        with open(self.csv_filename, 'w') as fh:
             writer = csv.writer(fh, delimiter=',')
             writer.writerow(['x', 'y', 'temp (c)'])
 
@@ -274,25 +282,52 @@ class FlirImageExtractor:
             writer.writerows(pixel_values)
 
 
+def run_all(exiftool_path='exiftool', is_debug=False, plot=False, extractcsv=False):
+    fname_re = re.compile('^FLIR\d+\.jpg$')
+    for fname in glob('**/FLIR*.jpg', recursive=True):
+        if not fname_re.match(os.path.basename(fname)):
+            continue
+        fie = FlirImageExtractor(fname, exiftool_path=exiftool_path,
+                                 is_debug=is_debug)
+        if fie.image_files_exist:
+            continue
+        fie.process_image()
+        if plot:
+            fie.plot()
+        if extractcsv:
+            fie.export_thermal_to_csv()
+        fie.save_images()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract and visualize Flir Image data')
-    parser.add_argument('-i', '--input', type=str, help='Input image. Ex. img.jpg', required=True)
+    parser.add_argument('-a', '--all', action='store_true', default=False, help='Operate on all FLIRxxx.jpg files in current directory, recursively')
+    parser.add_argument('-i', '--input', type=str, help='Input image. Ex. img.jpg')
     parser.add_argument('-p', '--plot', help='Generate a plot using matplotlib', required=False, action='store_true')
     parser.add_argument('-exif', '--exiftool', type=str, help='Custom path to exiftool', required=False,
                         default='exiftool')
     parser.add_argument('-csv', '--extractcsv', help='Export the thermal data per pixel encoded as csv file',
-                        required=False)
+                        required=False, action='store_true')
     parser.add_argument('-d', '--debug', help='Set the debug flag', required=False,
                         action='store_true')
     args = parser.parse_args()
 
-    fie = FlirImageExtractor(exiftool_path=args.exiftool, is_debug=args.debug)
-    fie.process_image(args.input)
+    if not args.input and not args.all:
+        raise RuntimeError('ERROR: must specify either -i or -a')
 
-    if args.plot:
-        fie.plot()
+    if args.all:
+        run_all(
+            exiftool_path=args.exiftool, is_debug=args.debug, plot=args.plot,
+            extractcsv=args.extractcsv
+        )
+    else:
+        fie = FlirImageExtractor(args.input, exiftool_path=args.exiftool, is_debug=args.debug)
+        fie.process_image()
 
-    if args.extractcsv:
-        fie.export_thermal_to_csv(args.extractcsv)
+        if args.plot:
+            fie.plot()
 
-    fie.save_images()
+        if args.extractcsv:
+            fie.export_thermal_to_csv()
+
+        fie.save_images()
